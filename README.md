@@ -1,2 +1,10 @@
-# staking_contracts
-Gamium staking contracts
+- Upgradeable
+- Can only stake between minLockDays and maxLockDays for each stake
+- Possibility of enabling isEarlyWithdrawAllowed if necessary
+- fund function to increase endTime and rewards
+- Fixed rewardsPerSecond, depending on the number of shares of the pool
+- Shares are calculated in calculateShares (dependent on lockDays)
+- when unstaking/ withdraw, user receives all the rewards and initial deposit
+- multiple functions to read / write ...etc
+- multiple read functions to give meaningful info of stakes
+- Have the possibility of enabling isEarlyWithdrawAllowed when necessary.
