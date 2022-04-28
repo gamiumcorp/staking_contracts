@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
@@ -84,7 +84,7 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
     mapping(address => uint256) public id;
     // Mapping of generated rewards per user
     mapping(address => uint256) public rewardsClaimed;
-    // ERC20 tokens reward much as staked token.
+    // ERC20 second token rewards = erc20 rewards * secondTokenRewardTimes, only read.
     uint256 public secondTokenRewardTimes;
 
     // Events
@@ -124,7 +124,7 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
      * @notice function sets initial state of contract
      *
      * @param _erc20 - address of reward token
-     * @param _rewardPerSecond - number of reward per second
+     * @param _rewardPerSecond - number of reward per second in wei
      * @param _startTime - beginning of farm
      * @param _minLockDays - min staking time for stake
      * @param _maxLockDays - max staking time for stake
@@ -149,7 +149,7 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
         __Ownable_init();
         __ReentrancyGuard_init();
 
-                    // Requires for correct initialization
+        // Requires for correct initialization
         require(_erc20 != address(0x0), "Wrong token address.");
         require(_rewardPerSecond > 0, "Rewards per second must be > 0.");
         require(
@@ -385,6 +385,7 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
         external
         onlyOwner
     {
+        require(_rewardFeePercent <= 100, "Amount must be lower or equal to 100.");
         rewardFeePercent = _rewardFeePercent;
         emit RewardFeePercentSet(rewardFeePercent);
 
@@ -424,7 +425,7 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
         validateStakeByStakeId(_user, stakeId)
         returns (uint256)
     {
-        StakeInfo memory  stake = stakeInfo[_user][stakeId];
+        StakeInfo memory stake = stakeInfo[_user][stakeId];
         return stake.amount;
     }
 
@@ -858,7 +859,7 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
         );
 
         // require that lockdays is between minLockDays and maxLockDays
-        require(_lockDays >= minLockDays && _lockDays <= maxLockDays);
+        require(_lockDays >= minLockDays && _lockDays <= maxLockDays, "Deposit is outside of acceptable range");
 
         StakeInfo memory stake;
         uint256 stakedAmount;
@@ -940,7 +941,7 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
 
         // check if locked days passed
         minimalTimeStakeRespected =
-            stake.depositTime + stake.lockedDays <= block.timestamp;
+            stake.depositTime + stake.lockedDays * 3600 * 24 <= block.timestamp;
 
         // if early withdraw is not allowed, user can't withdraw funds before
         if (!isEarlyWithdrawAllowed) {
@@ -1000,7 +1001,9 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
         stake.shares = stake.shares - _shares;
         stake.rewardDebt = stake.shares * accERC20PerShare / 1e18;
 
-        tokenStaked.transfer(address(msg.sender), _amount);
+        if (_amount > 0) {
+            tokenStaked.transfer(address(msg.sender), _amount);
+        }
 
         totalDeposits = totalDeposits - _amount;
 
@@ -1024,7 +1027,7 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
 
         // if early withdraw is not allowed, user can't withdraw funds before
         if (!isEarlyWithdrawAllowed) {
-            bool minimalTimeStakeRespected = stake.depositTime + stake.lockedDays <= block.timestamp;
+            bool minimalTimeStakeRespected = stake.depositTime + stake.lockedDays * 3600 * 24 <= block.timestamp;
             // Check if user has respected minimal time to stake, require it.
             require(
                 minimalTimeStakeRespected,
@@ -1035,7 +1038,9 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
         uint256 _amount = stake.amount;
         uint256 _shares = stake.shares;
 
-        tokenStaked.transfer(address(msg.sender), stake.amount);
+        if (_amount > 0) {
+            tokenStaked.transfer(address(msg.sender), stake.amount);
+        }
         totalDeposits = totalDeposits - stake.amount;
         totalShares = totalShares - stake.shares;
 
@@ -1056,8 +1061,8 @@ contract GamiumStakingUpgradeable is OwnableUpgradeable, ReentrancyGuardUpgradea
         external
         onlyOwner
     {
-        erc20.transfer(feeCollector, totalFeeCollectedTokens);
         totalFeeCollectedTokens = 0;
+        erc20.transfer(feeCollector, totalFeeCollectedTokens);
     }
 
     /**
